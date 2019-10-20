@@ -52,7 +52,6 @@ const database = {
   ]
 };
 
-
 app.use(cors());
 app.get("/", (req, res) => {
   res.json(database.users);
@@ -88,48 +87,66 @@ app.post("/signin", (req, res) => {
 });
 
 app.post("/register", (req, res) => {
-  const { email, name } = req.body;
+  const { email, name, password } = req.body;
+  const saltRounds = 10;
   //   bcrypt.genSalt(saltRounds, function(err, salt) {
   //     bcrypt.hash(password, salt, function(err, hash) {
   //         // Store hash in your password DB.
   //         console.log(hash);
   //     });
   // });
- db('users')
-  .returning('*')
-  .insert({
-  email,
-  name,
-  joined: new Date()
- })
-  .then(user => {
-    res.json(user[0]);
-  })
-  .catch(err => res.status(400).json('unable to register'))
-});
+  const salt = bcrypt.genSaltSync(saltRounds);
+  const hash = bcrypt.hashSync(password, salt);
+  db.transaction(trx => {
+    trx
+      .insert({
+        hash: hash,
+        email: email
+      })
+      .into("login")
+      .returning("email")
+      .then(loginEmail => {
+        return trx("users")
+          .returning("*")
+          .insert({
+            email: loginEmail[0],
+            name: name,
+            joined: new Date()
+          })
+          .then(user => {
+            res.json(user[0]);
+          })
+        })
+        .then(trx.commit)
+        .catch(trx.rollback)
+      })
+      .catch(err => res.status(400).json('unable to register'));
+    });
 
 app.get("/profile/:id", (req, res) => {
   const { id } = req.params;
-    db.select('*').from('users').where({
+  db.select("*")
+    .from("users")
+    .where({
       id
     })
     .then(user => {
-     if(user.length) {
-      res.json(user[0])
-     } else {
-       res.status(400).json('Not found')
-     }
+      if (user.length) {
+        res.json(user[0]);
+      } else {
+        res.status(400).json("Not found");
+      }
     })
-    .catch(err =>  res.status(400).json("error getting user"))
+    .catch(err => res.status(400).json("error getting user"));
 });
 app.put("/image", (req, res) => {
   const { id } = req.body;
- db('users')
-  .where('id', '=', id)
-  .increment('entries', 1)
-  .returning('entries')
-  .then(entries => res.json(entries[0]))
-  .catch(err => res.status(400).json('unable to get entries'))
+  db("users")
+    .where("id", "=", id)
+    .increment("entries", 1)
+    .returning("entries")
+    .then(entries => res.json(entries[0]))
+    .catch(err => res.status(400).json("unable to get entries"));
 });
 
 app.listen(3001, () => {
