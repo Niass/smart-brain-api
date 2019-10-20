@@ -58,32 +58,22 @@ app.get("/", (req, res) => {
 });
 
 app.post("/signin", (req, res) => {
-  // Load hash from your password DB.
-  bcrypt.compare(
-    req.body.password,
-    "$2b$10$tenW4tlKGDSNT7TJQTeLXuMzkJCM/jWquEUB8Na2oSPyEvSNNAGfO",
-    function(err, res) {
-      // res == true
-      console.log("first guess", res);
-    }
-  );
-  bcrypt.compare(
-    someOtherPlaintextPassword,
-    "$2b$10$tenW4tlKGDSNT7TJQTeLXuMzkJCM/jWquEUB8Na2oSPyEvSNNAGfO",
-    function(err, res) {
-      // res == false
-      console.log("second guess", res);
-    }
-  );
-
-  if (
-    req.body.email === database.users[0].email &&
-    req.body.password === database.users[0].password
-  ) {
-    res.json(database.users[0]);
-  } else {
-    res.status(400).json("error logging in");
-  }
+  db.select('email', 'hash').from('login')
+    .where('email', '=', req.body.email)
+    .then(data => {
+      const isValid = bcrypt.compareSync(req.body.password, data[0].hash);
+      if(isValid) {
+        return db.select('*').from('users')
+          .where('email', '=', req.body.email)
+          .then(user => {
+            res.json(user[0])
+          })
+          .catch(err => res.status(400).json('unable to get user'))
+      } else {
+        res.status(400).json('wrong credentials')
+      }
+    })
+    .catch(err => res.status(400).json('wrong credentials'))
 });
 
 app.post("/register", (req, res) => {
